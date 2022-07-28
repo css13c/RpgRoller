@@ -1,7 +1,7 @@
 import random
 import discord
 from discord import Button, Interaction, commands, Bot, Option, Embed, Cog
-from discord.ui import Item
+from discord.ui import View, Item
 from discord.commands.context import ApplicationContext
 from constants import COL_ROLL
 from typing import List, Optional
@@ -68,11 +68,11 @@ def get_breakdown(dice: str, rolls: DiceResult) -> str:
 class Roller(Cog):
     bot: Bot
 
-    def __init__(self, bot: Bot, ) -> None:
+    def __init__(self, bot: Bot) -> None:
         super().__init__()
         self.bot = bot
 
-    class BdButton(discord.ui.View):
+    class BdButton(View):
         rolls: DiceResult
         dice: str
         active: bool
