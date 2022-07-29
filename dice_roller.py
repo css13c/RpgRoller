@@ -3,7 +3,7 @@ import discord
 from discord import Button, Interaction, commands, Bot, Option, Embed, Cog
 from discord.ui import View, Item
 from discord.commands.context import ApplicationContext
-from constants import COL_ROLL
+from constants import COL_ROLL, TEST_GUILD
 from typing import List, Optional
 
 class DiceResult:
@@ -131,14 +131,14 @@ Examples:
                 elif die.isdigit():
                     result.add(DiceResult(die, int(die)))
                 else:
-                    roll = self.rollDie(die)
+                    roll = self.roll_die_str(die)
                     result.add(roll)
 
             return result 
         except Exception:
             return None
 
-    def rollDie(self, diceStr: str) -> DiceResult:
+    def roll_die_str(self, diceStr: str) -> DiceResult:
         splitDice = diceStr.split("d")
         [rolls, dieNumStr] = splitDice
         if rolls == "":
@@ -151,8 +151,14 @@ Examples:
 
         return result
 
+    def roll_die(self, dieNum: int, rolls: int = 1) -> DiceResult:
+        result = DiceResult(dice = f"{rolls}d{dieNum}")
+        for _ in range(rolls):
+            result.addRoll(random.randint(1, dieNum))
 
-    @commands.command(guild_ids=[744619460404707389], description="Rolls dice.")
+        return result
+
+    @commands.command(guild_ids=[TEST_GUILD], description="Rolls dice.")
     async def roll(
         self,
         ctx: ApplicationContext,

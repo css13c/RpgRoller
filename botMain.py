@@ -1,4 +1,6 @@
+import os
 import discord
+from dotenv import load_dotenv
 from dice_roller import Roller
 
 bot = discord.Bot()
@@ -10,4 +12,5 @@ async def on_ready() -> None:
 # Add cogs
 bot.add_cog(Roller(bot))
 
-bot.run("OTk5NDk4NzQzNTU0NTE1MDY0.GCm5bc.59cElP3XLBBnun_A9Qp5d37m2Vk-QUlCPGkDqo")
+load_dotenv()
+bot.run(os.environ["token"])
