@@ -6,6 +6,7 @@ from discord.commands.context import ApplicationContext
 from constants import COL_ROLL, TEST_GUILD
 from typing import List, Optional
 
+
 class DiceResult:
     die: str
     rolls: List[int]
@@ -19,13 +20,13 @@ class DiceResult:
     def __str__(self) -> str:
         return f"Rolls for {self.die}: [{','.join(str(x) for x in self.rolls)}] = {self.total}"
 
-    def getSumRolls(self) -> str:
+    def sum(self) -> str:
         if self.rolls == []:
             return str(self.total)
         else:
             return f"({'+'.join(str(x) for x in self.rolls)})"
 
-    def addRoll(self, roll: int) -> None:
+    def add(self, roll: int) -> None:
         self.rolls.append(roll)
         self.total += roll
 
@@ -35,12 +36,13 @@ class DiceResult:
     def min(self) -> int:
         return min(self.rolls)
 
+
 class RollResult:
     dice: List[DiceResult]
 
     def __init__(self) -> None:
         self.dice = []
-    
+
     def __str__(self) -> str:
         return self.total()
 
@@ -59,11 +61,12 @@ class RollResult:
         return [self.RollList(x.rolls, x.die) for x in self.dice]
 
     def output(self) -> str:
-        return " + ".join(r.getSumRolls() for r in self.dice)
+        return " + ".join(r.sum() for r in self.dice)
 
 
 def get_breakdown(dice: str, rolls: DiceResult) -> str:
     return dice + "\n" + rolls.output()
+
 
 class Roller(Cog):
     bot: Bot
@@ -80,7 +83,13 @@ class Roller(Cog):
         show_label = "Show breakdown"
         hide_label = "Hide breakdown"
 
-        def __init__(self, *items: Item, timeout: Optional[float] = 180, rolls: DiceResult, dice: str):
+        def __init__(
+            self,
+            *items: Item,
+            timeout: Optional[float] = 180,
+            rolls: DiceResult,
+            dice: str,
+        ):
             super().__init__(*items, timeout=timeout)
             self.rolls = rolls
             self.dice = dice
@@ -91,10 +100,10 @@ class Roller(Cog):
             current = interaction.message.embeds[0]
             em = Embed(title=current.title, color=COL_ROLL)
             if self.active:
-                button.label=self.show_label
+                button.label = self.show_label
                 em.remove_footer()
             else:
-                button.label=self.hide_label
+                button.label = self.hide_label
                 em.set_footer(text=get_breakdown(self.dice, self.rolls))
 
             self.active = not self.active
@@ -121,7 +130,7 @@ Examples:
 ```
 """
 
-    def parseRoll(self, dice: str) -> DiceResult:
+    def parse_roll(self, dice: str) -> DiceResult:
         try:
             split = dice.strip().split()
             result = RollResult()
@@ -134,27 +143,22 @@ Examples:
                     roll = self.roll_die_str(die)
                     result.add(roll)
 
-            return result 
+            return result
         except Exception:
             return None
 
-    def roll_die_str(self, diceStr: str) -> DiceResult:
-        splitDice = diceStr.split("d")
-        [rolls, dieNumStr] = splitDice
+    def roll_die_str(self, dice_str: str) -> DiceResult:
+        splitDice = dice_str.split("d")
+        [rolls, die_num_str] = splitDice
         if rolls == "":
             rolls = 1
 
-        result = DiceResult(dice = diceStr)
-        dieNum = int(dieNumStr)
-        for _ in range(int(rolls)):
-            result.addRoll(random.randint(1, dieNum))
+        return self.roll_die(int(die_num_str), rolls)
 
-        return result
-
-    def roll_die(self, dieNum: int, rolls: int = 1) -> DiceResult:
-        result = DiceResult(dice = f"{rolls}d{dieNum}")
+    def roll_die(self, die_num: int, rolls: int = 1) -> DiceResult:
+        result = DiceResult(dice=f"{rolls}d{die_num}")
         for _ in range(rolls):
-            result.addRoll(random.randint(1, dieNum))
+            result.add(random.randint(1, die_num))
 
         return result
 
@@ -162,8 +166,17 @@ Examples:
     async def roll(
         self,
         ctx: ApplicationContext,
-        dice: Option(str, description="Dice to roll. Enter 'help' for more details", required=True),
-        bd: Option(bool, name="breakdown", description="Shows all values rolled to reach the result", default=False)
+        dice: Option(
+            str,
+            description="Dice to roll. Enter 'help' for more details",
+            required=True,
+        ),
+        bd: Option(
+            bool,
+            name="breakdown",
+            description="Shows all values rolled to reach the result",
+            default=False,
+        ),
     ) -> None:
         print(f"\n{ctx.author} rolled {dice}")
         if dice == "help" or dice.strip() == "":
@@ -171,15 +184,17 @@ Examples:
             await ctx.respond(self.HELP)
             return
 
-        result = self.parseRoll(dice)
+        result = self.parse_roll(dice)
         if result == None:
             print(f"ID10T Error, got help")
-            await ctx.respond("Cannot understand dice rolled. Here's some help: " + self.HELP)
+            await ctx.respond(
+                "Cannot understand dice rolled. Here's some help: " + self.HELP
+            )
             return
 
         desc = f"{dice}"
         if bd:
-            desc += '\n' + result.output()
+            desc += "\n" + result.output()
 
         total = result.total()
         print(f"Rolled {total}")

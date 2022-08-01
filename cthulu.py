@@ -10,20 +10,80 @@ from discord.commands.context import ApplicationContext
 from constants import TEST_GUILD
 from dice_roller import DiceResult, Roller
 
+
 class CSkillResult:
+    # Success thresholds
     threshold: int = 0
+    hard_thresh: int = math.floor(threshold / 2)
+    extreme_thresh: int = math.floor(threshold / 5)
+
+    # Roll values
     tens: DiceResult
     ones: DiceResult
-    hardThresh: int = math.floor(threshold / 2)
-    expertThresh: int = math.floor(threshold / 5)
+    has_bonus: bool
+    pushed: bool
 
-    def __init__(self, threshold: int) -> None:
+    # Dice string rolled
+    roll_str: str
+
+    def __init__(
+        self,
+        query: str,
+        threshold: int,
+        tens: DiceResult,
+        ones: DiceResult,
+        has_bonus: bool = False,
+        pushed: bool = False,
+    ) -> None:
         self.threshold = threshold
+        self.tens = tens
+        self.ones = ones
+        self.has_bonus = has_bonus
+        self.roll_str = query
+        self.pushed = pushed
 
-    def getEmbed() -> Embed:
-        return discord.Embed()
+    def get_tens_val(self) -> int:
+        return self.tens.max() if self.has_bonus else self.tens.min()
+
+    def get_roll(self) -> int:
+        ten_val = self.get_tens_val()
+        one_val = self.ones.max()
+        return ten_val + one_val
+
+    def get_embed(self) -> Embed:
+        em = Embed(title=self.get_success())
+
+        # Values needed for footer
+        tens_vals = "/".join(str(x) for x in self.tens)
+        em.footer = f"""Roll: {self.roll_str}
+Result: {self.get_tens_val()} ({tens_vals}) + {self.ones.max()} = {self.get_roll()}"""
+
+    # TODO: Add colors (probs return tuple)
+    def get_success(self, improvement: bool = False) -> str:
+        roll = self.get_roll()
+        if improvement:
+            return (
+                "Improvement Success!" if roll > self.threshold else "Improvment Fail!"
+            )
+
+        # Don't want to invert success value since improvement checks can't have criticals
+        if roll == 1:
+            return "Critical Success!"
+        elif roll == 100:
+            return "Critical Fail!"
+        elif roll <= self.extreme_thresh:
+            return "Extreme Success!"
+        elif roll <= self.hard_thresh:
+            return "Hard Success!"
+        elif roll <= self.threshold:
+            return "Success"
+        else:
+            return "Failure"
+
 
 PushFunc = Callable[[str], CSkillResult]
+
+
 class Cthulu(Cog):
     bot: Bot
 
@@ -32,18 +92,24 @@ class Cthulu(Cog):
         self.bot = bot
 
     class PushRoll(View):
-        onPush: PushFunc
-        rollStr: str
+        on_push: PushFunc
+        original: CSkillResult
 
-        def __init__(self, *items: Item, timeout: Optional[float] = 180, onPush: PushFunc, rollStr: str):
+        def __init__(
+            self,
+            *items: Item,
+            timeout: Optional[float] = 180,
+            on_push: PushFunc,
+            original: CSkillResult,
+        ):
             super().__init__(*items, timeout=timeout)
-            self.onPush = onPush
-            self.rollStr = rollStr
+            self.on_push = on_push
+            self.original = original
 
         @discord.ui.button(label="Push Roll", style=discord.ButtonStyle.primary)
         async def button_callback(self, button: Button, interaction: Interaction):
-            result = self.onPush(self.rollStr)
-            interaction.message.reply(embed=result.getEmbed())
+            result = self.on_push(self.original.roll_str)
+            interaction.message.reply(embed=result.get_embed())
 
     HELP = """```
 /croll [diceCount=1][p|b][skillThreshold]
@@ -66,12 +132,7 @@ Examples:
 ```
 """
 
-    async def handleRoll(self, pbDie: int, penalty: bool, thresh: int) -> CSkillResult:
-        result = CSkillResult()
-        roller: Roller = self.bot.get_cog("Roller")
-        tensRolls = roller.roll_die(pbDie + 1, 10)
-
-    async def parseRoll(self, dice: str) -> CSkillResult:
+    def parse_roll(self, dice: str) -> CSkillResult:
         if dice.__contains__("p") and dice.__contains__("b"):
             return None
 
@@ -79,17 +140,34 @@ Examples:
         if match == None:
             return None
 
-        [pbDice, pb, threshold] = match.groups()
-        if pbDice == "":
-            pbDice = 1
+        [pb_dice, pb, threshold] = match.groups()
+        if pb_dice == "":
+            pb_dice = 1
 
-        return self.handleRoll(pbDice, pb == "p", threshold)
+        roller: Roller = self.bot.get_cog("Roller")
+        tensRolls = roller.roll_die(rolls=pb_dice + 1, die_num=10)
+        onesRoll = roller.roll_die(rolls=1, die_num=10)
+        bonus = pb == "p"
+        result = CSkillResult(
+            query=dice,
+            has_bonus=bonus,
+            pushed=False,
+            threshold=threshold,
+            ones=onesRoll,
+            tens=tensRolls,
+        )
+
+        return result
 
     @commands.command(guild_ids=[TEST_GUILD], description="")
     async def croll(
         self,
         ctx: ApplicationContext,
-        dice: Option(str, description="Dice to roll. Enter 'help' for more details", required=True)
+        dice: Option(
+            str,
+            description="Dice to roll. Enter 'help' for more details",
+            required=True,
+        ),
     ) -> None:
         print(f"\nCthulu check for {ctx.author}: {dice}")
         if dice == "help" or dice.strip() == "":
@@ -97,8 +175,14 @@ Examples:
             await ctx.respond(self.HELP)
             return
 
-        result = self.parseRoll(dice)
+        result = self.parse_roll(dice)
         if result == None:
             print("ID10T Error, got help")
-            await ctx.respond("Cannot understand dice string. Have some help: " + self.HELP)
+            await ctx.respond(
+                "Cannot understand dice string. Have some help: " + self.HELP
+            )
             return
+
+        print(f"Rolled {result.get_roll()}")
+        button = self.PushRoll(on_push=self.parse_roll, original=result)
+        await ctx.respond(embed=result.get_embed(), view=button)
